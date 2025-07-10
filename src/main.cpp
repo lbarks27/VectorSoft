@@ -18,8 +18,8 @@
 #include "tvc_optimizer.h"
 #include "esc_pwm.h"
 
-// Access orientation from sensor_fetch
-extern float orientation[3];
+
+#include <Eigen/Dense>
 
 TVCState tvc;
 
@@ -99,9 +99,8 @@ void loop() {
 
     // Print torqueTarg values to verify they are updated before being passed to setDynamicTorque
     Serial.print("Computed Target Torque: ");
-    Serial.print(torqueTarg[0], 4); Serial.print(", ");
-    Serial.print(torqueTarg[1], 4); Serial.print(", ");
-    Serial.println(torqueTarg[2], 4);
+    Serial.print(torqueTarg.x(), 4); Serial.print(", ");
+    Serial.println(torqueTarg.y(), 4);
 
     setDynamicTorque(torqueTarg[0], torqueTarg[1], 0.0f); // Use only roll and pitch
 
@@ -130,10 +129,10 @@ void loop() {
     }
 
     // Print orientation (roll, pitch, yaw) derived from BNO_ROT
-    extern float BNO_ROT[3][3];
-    float roll  = atan2(BNO_ROT[2][1], BNO_ROT[2][2]) * RAD_TO_DEG;
-    float pitch = asin(-BNO_ROT[2][0]) * RAD_TO_DEG;
-    float yaw   = atan2(BNO_ROT[1][0], BNO_ROT[0][0]) * RAD_TO_DEG;
+    extern Eigen::Matrix3f BNO_ROT;
+    float roll  = atan2(BNO_ROT(2,1), BNO_ROT(2,2)) * RAD_TO_DEG;
+    float pitch = asin(-BNO_ROT(2,0)) * RAD_TO_DEG;
+    float yaw   = atan2(BNO_ROT(1,0), BNO_ROT(0,0)) * RAD_TO_DEG;
     Serial.print("Orientation (roll, pitch, yaw): ");
     Serial.print(roll, 4); Serial.print(", ");
     Serial.print(pitch, 4); Serial.print(", ");

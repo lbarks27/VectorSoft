@@ -3,6 +3,7 @@
 #include "defines.h"
 #include <Arduino.h> // For Serial output if using on Teensy/Arduino
 #include <Servo.h>   // Ensure Servo library is available
+#include <Eigen/Dense>
 
 #ifndef S_microseconds
 #define S_microseconds 0
@@ -71,30 +72,35 @@ void TVC_servo_to_vec(float S1, float S2, float S3, float S4, float S5, float S6
 }
 
 float torqueCost(const float* x, int n, const TVCState* tvc) {
-  float torque[3] = {0};
-
+  // Accumulate produced torque vector
+  Eigen::Vector3f torque = Eigen::Vector3f::Zero();
   for (int i = 0; i < 3; ++i) {
     const TVCMotor* motor = (i == 0) ? &tvc->M1 : (i == 1) ? &tvc->M2 : &tvc->M3;
     float pitch = x[i * 2 + 0];
     float yaw   = x[i * 2 + 1];
-
-    // Compute rotated thrust vector (Z-axis negative thrust, pitched/yawed)
-    float thrustVec[3] = {
+    // Compute thrust vector in body frame
+    Eigen::Vector3f thrustVec(
       -motor->thrust * sinf(yaw),
       -motor->thrust * sinf(pitch),
       -motor->thrust * cosf(yaw) * cosf(pitch)
-    };
-
-    torque[0] += vecCross1(motor->position[0], motor->position[1], motor->position[2], thrustVec[0], thrustVec[1], thrustVec[2]);
-    torque[1] += vecCross2(motor->position[0], motor->position[1], motor->position[2], thrustVec[0], thrustVec[1], thrustVec[2]);
-    torque[2] += vecCross3(motor->position[0], motor->position[1], motor->position[2], thrustVec[0], thrustVec[1], thrustVec[2]);
+    );
+    // Motor position vector
+    Eigen::Vector3f pos(
+      motor->position[0],
+      motor->position[1],
+      motor->position[2]
+    );
+    // Add cross product pos x thrust
+    torque += pos.cross(thrustVec);
   }
-
-  float dx = tvc->targetTorque[0] - torque[0];
-  float dy = tvc->targetTorque[1] - torque[1];
-  float dz = tvc->targetTorque[2] - torque[2];
-
-  return vecLength(dx, dy, dz);
+  // Target torque from state
+  Eigen::Vector3f targetTorque(
+    tvc->targetTorque[0],
+    tvc->targetTorque[1],
+    tvc->targetTorque[2]
+  );
+  // Return Euclidean norm of torque error
+  return (targetTorque - torque).norm();
 }
 
 void optimizeTVC(TVCState& tvc, float* x, AdamOptimizer& optimizer, int steps, bool debug) {
